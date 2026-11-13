@@ -1,1 +1,40 @@
-<!doctype html><meta charset=utf-8><meta name=robots content=noindex><title>...</title>
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#16324a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Norge i dag">
+<title>Norge i dag</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Norge i dag</h1>
+    <p id="stamp" class="muted">Laddar…</p>
+  </div>
+  <a id="run" class="btn ghost" hidden target="_blank" rel="noopener">Kör nu</a>
+</header>
+
+<div id="filters" class="filters" hidden></div>
+<main id="main"><p class="muted pad">Hämtar dagens lista…</p></main>
+<div id="map" class="map" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="oversikt" class="on"><span>◎</span>Översikt</button>
+  <button data-tab="par"><span>⇄</span>Par</button>
+  <button data-tab="bostader"><span>⌂</span>Bostäder</button>
+  <button data-tab="jobb"><span>✦</span>Jobb</button>
+  <button data-tab="storahus"><span>▦</span>Stora hus</button>
+  <button data-tab="sparat"><span>★</span>Sparat</button>
+</nav>
+<script src="app.js"></script>
+</body>
+</html>
