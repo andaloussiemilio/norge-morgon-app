@@ -173,7 +173,7 @@ function homeCard(h, mode = 'wide', i = 0) {
   const fallback = 'onerror="if(this.src!==this.dataset.full)this.src=this.dataset.full"';
   let media;
   if (!imgs.length) media = '<div class="noimg">Inga bilder i annonsen</div>';
-  else if (mode === 'tile') media = `<img src="${esc(h.cover || imgs[0])}" data-full="${esc(imgs[0])}" loading="lazy" decoding="async" alt="" ${fallback}>`;
+  else if (mode === 'tile') media = `<img src="${esc((h.cover || imgs[0]).replace('/dynamic/960w/', '/dynamic/640w/'))}" data-full="${esc(imgs[0])}" loading="${i < 6 ? 'eager' : 'lazy'}" decoding="async" alt="" ${fallback}>`;
   else media = `<div class="gallery">${imgs.map((src, n) => `<img src="${esc(n === 0 && h.cover ? h.cover : src)}" data-full="${esc(src)}" loading="lazy" decoding="async" alt="" ${fallback}>`).join('')}</div>
     ${total > 1 ? `<span class="counter">1/${total}</span>` : ''}`;
   const near = (nearHome[h.id] || []).length;
