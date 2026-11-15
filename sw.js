@@ -1,5 +1,5 @@
 /* Nätet först, cache som reserv: appen går att öppna utan täckning med senast hämtade lista. */
-const CACHE = 'norge-v2';
+const CACHE = 'norge-v3';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => {

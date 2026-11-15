@@ -32,6 +32,7 @@ const PATHS = {
   pen: '<path d="M4 20l1-4.500L16.500 4l3.500 3.500L8.500 19 4 20z"/><path d="M14 6.500l3.500 3.500"/>',
   pin: '<path d="M12 21s-6.500-5.600-6.500-11a6.500 6.500 0 0 1 13 0c0 5.400-6.500 11-6.500 11z"/><circle cx="12" cy="10" r="2.300"/>',
   check: '<path d="M5 12.500l4.500 4.500L19 7.500"/>',
+  undo: '<path d="M9 7 4.5 11.5 9 16"/><path d="M4.5 11.5H14a5.5 5.5 0 0 1 0 11h-2" transform="translate(0 -3.5)"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.500-4.500L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.500 4.500L20 16"/><path d="M20 20v-4h-4"/>',
 };
 const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ''}</svg>`;
@@ -153,7 +154,7 @@ function jobList() {
 function homeList() {
   const f = ui.homes, q = f.q.trim().toLowerCase();
   const out = DATA.homes.filter((h) => !isHidden(h.id) &&
-    (f.area === 'alla' || h.area === f.area) && (f.seg === 'alla' || (f.seg === 'budget' ? h.within_budget : h.big_house)) &&
+    (f.area === 'alla' || h.area === f.area) && (f.seg === 'alla' || (f.seg === 'big' ? h.big_house : h.house)) &&
     (!f.onlyNew || isNew(h)) && (!f.view || h.view) && (!f.moveIn || h.move_in_fits) && (!f.noShared || !h.shared) &&
     (!h.rent || h.rent <= f.maxRent) && (!q || hay(h.headline, h.title, h.address, h.place, h.kommune, h.text).includes(q)));
   if (f.sort === 'new') out.sort((a, b) => (b.first_seen > a.first_seen ? 1 : b.first_seen < a.first_seen ? -1 : b.rank - a.rank));
@@ -196,6 +197,7 @@ function jobTags(j, full) {
   const due = dueInfo(j), st = mk(j.id).st;
   return [
     st ? `<span class="tag status">${STATUS[st]}</span>` : '',
+    !st && (DATA.letters || {})[j.id] ? '<span class="tag view">Brev klart</span>' : '',
     isNew(j) ? '<span class="tag new">Ny</span>' : '',
     j.housing === 'ja' ? '<span class="tag good">Boende erbjuds</span>' : '',
     j.start_fits ? '<span class="tag good">Start passar</span>' : '',
@@ -291,6 +293,7 @@ function viewToday() {
       </div></section>
     ${section(newHomes.length >= 2 ? 'Nya bostäder' : 'Bostäder för dig', 'bostader', homes.map((h) => homeCard(h, 'wide')).join(''))}
     ${section(newJobs.length >= 3 ? 'Nya jobb' : 'Jobb som passar dig', 'jobb', topJobs.map(jobCard).join(''), 'narrow')}
+    ${section('Brev klara att skicka', '', DATA.jobs.filter((j) => (DATA.letters || {})[j.id] && !isHidden(j.id) && !mk(j.id).st).slice(0, 8).map(jobCard).join(''), 'narrow')}
     ${section('Jobb + bostad nära varandra', 'par', pairs.map(pairCard).join(''))}
     ${section('Frist snart', '', soon.map(jobCard).join(''), 'narrow')}
     <div class="sec"><h2>Per område</h2></div>
@@ -305,12 +308,12 @@ function viewList(kind) {
   const f = ui[kind];
   const sorts = kind === 'jobs' ? [['match', 'Bäst match'], ['new', 'Nyast'], ['due', 'Frist snart']] : [['best', 'Bäst för dig'], ['new', 'Nyast'], ['cheap', 'Lägst hyra'], ['big', 'Störst']];
   const noun = kind === 'jobs' ? 'jobb' : (items.length === 1 ? 'bostad' : 'bostäder');
-  const seg = kind === 'homes' ? `<div class="seg" style="margin:0 16px 12px">${[['alla', 'Alla'], ['budget', `Upp till ${nf(DATA.limits.max_rent)} kr`], ['big', 'Stora hus']]
+  const seg = kind === 'homes' ? `<div class="seg" style="margin:0 16px 12px">${[['alla', 'Alla'], ['hus', 'Hus och hytter'], ['big', 'Stora hus']]
     .map(([v, l]) => `<button data-act="set" data-kind="homes" data-key="seg" data-val="${v}" class="${f.seg === v ? 'on' : ''}">${l}</button>`).join('')}</div>` : '';
   const cards = kind === 'jobs' ? `<div class="list">${items.slice(0, limit).map(jobCard).join('')}</div>`
     : `<div class="masonry">${items.slice(0, limit).map((h, i) => homeCard(h, 'tile', i)).join('')}</div>`;
   const empty = `<div class="empty">${icon('search')}<b>Inget matchar just nu</b>Prova att ta bort ett filter eller byta område.<br><br><button class="btn" data-act="reset" data-kind="${kind}">Rensa filter</button></div>`;
-  return `${seg}<div class="count"><span class="muted small">${items.length} ${noun}</span>
+  return `${seg}<div class="count"><span class="muted small">${items.length} ${noun}${items.length > 1 ? ` · <button class="linkbtn" data-act="triage" data-kind="${kind}">Gå igenom en i taget</button>` : ''}</span>
       <select data-act="sort" data-kind="${kind}" aria-label="Sortering">${sorts.map(([v, l]) => `<option value="${v}" ${f.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     ${items.length ? `${cards}${items.length > limit ? '<div class="more" id="more"></div>' : ''}` : empty}`;
 }
@@ -376,7 +379,7 @@ function mountSheet(animate) {
   overlay.innerHTML = `<div class="scrim ${animate ? '' : 'in'}" data-act="close"></div>
     <section class="sheet ${spec.half ? 'half' : ''} ${animate ? '' : 'in'}" role="dialog" aria-modal="true">
       ${spec.half ? '<div class="grab"></div>' : ''}
-      <div class="head"><button class="iconbtn" data-act="close" aria-label="Stäng">${icon(spec.half ? 'x' : 'back')}</button><div class="title">${esc(spec.title || '')}</div>${spec.tools ? spec.tools() : ''}</div>
+      <div class="head"><button class="iconbtn" data-act="close" aria-label="Stäng">${icon(spec.half || spec.closeX ? 'x' : 'back')}</button><div class="title">${esc(spec.title || '')}</div>${spec.tools ? spec.tools() : ''}</div>
       ${spec.body()}
     </section>${spec.bar ? `<div class="actionbar">${spec.bar()}</div>` : ''}`;
   const sheet = $('.sheet', overlay);
@@ -448,7 +451,11 @@ function homeSheet(id) {
   };
 }
 
-function letterUrl(j) {
+function letterUrl(j, draft) {
+  if (draft) {
+    const edit = `Här är ett utkast till personligt brev för jobbet "${j.title}" hos ${j.employer} (${j.url}). Hjälp mig förbättra det. Behåll det kort och konkret, utan klyschor, och hitta inte på något. Fråga mig vad jag vill ändra.\n\n${draft}`;
+    return `https://claude.ai/new?q=${encodeURIComponent(edit.slice(0, 1800))}`;
+  }
   const prompt = `Skriv ett personligt brev till det här jobbet. Läs annonsen på länken först. Utgå från mitt CV (jag klistrar in det om du inte redan har det). ` +
     `Skriv kort, högst en halv sida, konkret och utan klyschor. Visa mig brevet innan något skickas.\n\nJobb: ${j.title}\nArbetsgivare: ${j.employer}\nOrt: ${j.kommune}\nAnnons: ${j.url}`;
   return `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
@@ -460,7 +467,7 @@ function jobSheet(id) {
     title: j.employer || 'Jobb',
     tools: () => `<button class="iconbtn" data-act="share" data-id="${esc(id)}" aria-label="Dela">${icon('share')}</button>`,
     body: () => {
-      const due = dueInfo(j), st = mk(id).st || '';
+      const due = dueInfo(j), st = mk(id).st || '', letter = (DATA.letters || {})[id];
       const near = (nearJob[id] || []).filter((n) => H[n.id] && !isHidden(n.id)).sort((a, b) => a.min - b.min);
       const facts = [['Arbetsgivare', j.employer], ['Ort', `${j.kommune}, ${areaName(j.area)}`], ['Omfattning', [j.extent, j.engagement].filter(Boolean).join(', ') || 'Saknas'],
         ['Start', j.start || 'Saknas'], ['Ansökningsfrist', due.label.replace(/^Frist:? ?/i, '') || 'Saknas'], ['Boende', j.housing === 'ja' ? 'Erbjuds' : j.housing === 'nej' ? 'Ordnas inte' : 'Okänt']];
@@ -475,7 +482,14 @@ function jobSheet(id) {
           <div class="block"><h2>Min ansökan</h2>
             <div class="seg">${[['', 'Inte sökt'], ...Object.entries(STATUS)].map(([k, l]) => `<button data-act="status" data-id="${esc(id)}" data-val="${k}" class="${st === k ? 'on' : ''}">${l}</button>`).join('')}</div>
             <textarea data-note="${esc(id)}" placeholder="Anteckning: vem du pratade med, när du sökte, vad som sades.">${esc(mk(id).note || '')}</textarea>
-            <a class="btn block quiet" style="margin-top:10px" href="${esc(letterUrl(j))}" target="_blank" rel="noopener">${icon('pen')} Skriv personligt brev med Claude</a></div>
+          </div>
+          <div class="block"><h2>Personligt brev</h2>
+            ${letter ? `<div class="letter" id="letter">${esc(letter.text)}</div>
+              <div class="row" style="margin-top:10px"><button class="btn primary" data-act="copyletter" data-id="${esc(id)}">Kopiera brevet</button>
+                <a class="btn" href="${esc(letterUrl(j, letter.text))}" target="_blank" rel="noopener">${icon('pen')} Ändra</a></div>
+              <p class="muted small" style="margin-top:8px">Utkast skrivet av Claude utifrån ditt CV. Läs igenom och ändra innan du skickar. Inget skickas automatiskt.</p>`
+            : `<p class="muted">Brev skrivs i förväg för de bäst rankade jobben, några nya varje morgon. För det här jobbet kan du be om ett direkt.</p>
+              <a class="btn block quiet" style="margin-top:10px" href="${esc(letterUrl(j))}" target="_blank" rel="noopener">${icon('pen')} Skriv brev med Claude</a>`}</div>
           <div class="block"><h2>Bostäder inom ${DATA.limits.drive} minuter</h2>
             ${j.lat != null ? `<div class="minimap" aria-label="Karta över arbetsplatsen och bostäder i närheten"></div><p class="muted small" style="margin:8px 0 6px">${j.geo_approx ? 'Annonsen saknar adress, så jobbet visas mitt i kommunen. ' : ''}Prislapparna är bostäder.</p>` : ''}
             ${j.lacks && j.lacks.length || j.score < 3 ? '<p class="muted">Bostäder paras bara ihop med jobb som har betyg 3 eller högre och inga saknade krav.</p>'
@@ -491,6 +505,55 @@ function jobSheet(id) {
       <button class="btn sq ${isSaved(id) ? 'on' : ''}" data-act="save" data-id="${esc(id)}" aria-label="Spara">${icon('heart')}</button>
       <a class="btn primary" href="${esc(j.url)}" target="_blank" rel="noopener">Annons ${icon('out')}</a>`,
   };
+}
+
+// Snabbsortering: en annons i taget, med stora knappar eller svep åt sidan.
+function triageSheet(kind) {
+  const queue = (kind === 'jobs' ? jobList() : homeList()).filter((x) => !isSaved(x.id) && !mk(x.id).st).map((x) => x.id);
+  const spec = {
+    queue, i: 0, prev: [], closeX: true,
+    get title() { return `${Math.min(this.i + 1, queue.length)} av ${queue.length}`; },
+    tools: () => `<button class="iconbtn" data-act="tri" data-val="undo" aria-label="Ångra senaste">${icon('undo')}</button>`,
+    body: () => {
+      const id = queue[spec.i], x = J[id] || H[id];
+      if (!x) return '<div class="empty"><b>Inget att gå igenom</b>Allt i den här listan är redan sparat eller sökt.</div>';
+      if (id in H) {
+        const imgs = (x.images && x.images.length ? x.images : (x.cover ? [x.cover] : [])).slice(0, 8);
+        return `<div class="tri" data-swipe>${imgs.length ? `<div class="media hero-media"><div class="gallery">${imgs.map((src, n) => `<img src="${esc(src)}" loading="${n ? 'lazy' : 'eager'}" alt="">`).join('')}</div>
+            ${imgs.length > 1 ? `<span class="counter">1/${(x.images || imgs).length}</span>` : ''}</div>` : ''}
+          <div class="pad"><h1 style="margin-top:16px;font-size:1.4rem">${esc(x.place || x.kommune || '')}</h1>
+            <p class="facts">${esc(x.headline || x.title)}</p>
+            <p class="facts">${esc([x.type, x.size ? `${x.size} m²` : '', x.rooms ? `${x.rooms} rum` : '', availInfo(x)].filter(Boolean).join(' · '))}</p>
+            <p class="pricel" style="font-size:1.1rem"><b>${kr(x.rent)}</b>${x.rent ? ' / mån' : ''}</p>
+            <div class="tags">${x.view ? '<span class="tag view">Utsikt</span>' : ''}${x.big_house ? '<span class="tag">Stort hus</span>' : ''}${x.shared ? '<span class="tag">Delat boende</span>' : ''}
+              ${(nearHome[id] || []).length ? `<span class="tag view">${(nearHome[id] || []).length} jobb inom ${DATA.limits.drive} min</span>` : ''}</div>
+            ${x.text ? `<p class="prose clamp" style="margin-top:14px">${esc(x.text)}</p>` : ''}
+            <button class="textbtn" data-act="open" data-id="${esc(id)}">Visa allt om bostaden</button></div></div>`;
+      }
+      return `<div class="tri pad" data-swipe><div style="display:grid;grid-template-columns:62px 1fr;gap:16px;align-items:center;margin-top:10px">${ring(x.score, 'big')}
+          <div><h1 style="font-size:1.4rem">${esc(x.title)}</h1><p class="facts" style="margin-top:4px">${esc(x.employer)} · ${esc(x.kommune)}</p></div></div>
+        <div class="tags">${jobTags(x, true)}</div>
+        ${x.reason ? `<div class="callout" style="margin-top:16px">${icon('check')}<div>${esc(x.reason)}</div></div>` : ''}
+        ${(x.lacks || []).length ? `<div class="callout warn" style="margin-top:10px">${icon('eyeoff')}<div><b>Krav du kanske saknar</b>${esc(x.lacks.join(', '))}</div></div>` : ''}
+        <dl class="dl">${[['Omfattning', [x.extent, x.engagement].filter(Boolean).join(', ') || 'Saknas'], ['Start', x.start || 'Saknas'], ['Frist', dueInfo(x).label.replace(/^Frist:? ?/i, '') || 'Saknas'], ['Boende', x.housing === 'ja' ? 'Erbjuds' : 'Okänt']]
+          .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+        <button class="textbtn" data-act="open" data-id="${esc(id)}">Visa allt om jobbet</button></div>`;
+    },
+    bar: () => `<button class="btn" data-act="tri" data-val="hide" style="flex:1">${icon('x')} Inte för mig</button>
+      <button class="btn primary" data-act="tri" data-val="save" style="flex:1">${icon('heart')} Spara</button>`,
+    mount: (sheet) => {
+      const el = $('[data-swipe]', sheet);
+      if (!el) return;
+      let x0 = null, y0 = 0;
+      el.addEventListener('touchstart', (e) => { if (e.target.closest('.gallery')) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+      el.addEventListener('touchend', (e) => {
+        if (x0 === null) return;
+        const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+        if (Math.abs(dx) > 90 && Math.abs(dx) > Math.abs(dy) * 2) $(`[data-act="tri"][data-val="${dx > 0 ? 'save' : 'hide'}"]`).click();
+      }, { passive: true });
+    },
+  };
+  return spec;
 }
 
 function filterSheet(kind) {
@@ -648,6 +711,19 @@ document.addEventListener('click', (e) => {
       const x = J[d.id] || H[d.id];
       const payload = { title: x.headline || x.title, url: x.url };
       if (navigator.share) navigator.share(payload).catch(() => {}); else navigator.clipboard.writeText(x.url).then(() => toast('Länken är kopierad'));
+      break;
+    }
+    case 'copyletter': navigator.clipboard.writeText((DATA.letters[d.id] || {}).text || '').then(() => toast('Brevet är kopierat'), () => toast('Kunde inte kopiera')); break;
+    case 'triage': openSheet(triageSheet(d.kind)); break;
+    case 'tri': {
+      const spec = sheets[sheets.length - 1], cur = spec.queue[spec.i];
+      const before = mk(cur).s || null;
+      if (d.val === 'hide') setMark(cur, { s: 'hidden' });
+      if (d.val === 'save') setMark(cur, { s: 'saved' });
+      if (d.val === 'undo' && spec.i > 0) { spec.i -= 1; setMark(spec.queue[spec.i], { s: spec.prev.pop() ?? null }); mountSheet(false); break; }
+      spec.prev.push(before);
+      spec.i += 1;
+      if (spec.i >= spec.queue.length) { closeSheet(); toast('Klart. Du har gått igenom alla.'); } else mountSheet(false);
       break;
     }
     case 'copylink': navigator.clipboard.writeText(`${location.origin}${location.pathname}#k=${store.get('key', '')}`).then(() => toast('Länken är kopierad'), () => toast('Kunde inte kopiera')); break;
