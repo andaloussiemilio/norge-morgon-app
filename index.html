@@ -4,37 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#16324a">
+<meta name="theme-color" content="#f5f2ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a1317" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Norge i dag">
 <title>Norge i dag</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="style.css">
+<script>try { var t = JSON.parse(localStorage.getItem('theme')); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
-<header class="top">
-  <div>
-    <h1>Norge i dag</h1>
-    <p id="stamp" class="muted">Laddar…</p>
-  </div>
-  <a id="run" class="btn ghost" hidden target="_blank" rel="noopener">Kör nu</a>
-</header>
-
-<div id="filters" class="filters" hidden></div>
-<main id="main"><p class="muted pad">Hämtar dagens lista…</p></main>
-<div id="map" class="map" hidden></div>
-<div id="toast" class="toast" hidden></div>
-
-<nav class="tabs" id="tabs">
-  <button data-tab="oversikt" class="on"><span>◎</span>Översikt</button>
-  <button data-tab="par"><span>⇄</span>Par</button>
-  <button data-tab="bostader"><span>⌂</span>Bostäder</button>
-  <button data-tab="jobb"><span>✦</span>Jobb</button>
-  <button data-tab="storahus"><span>▦</span>Stora hus</button>
-  <button data-tab="sparat"><span>★</span>Sparat</button>
-</nav>
+<div id="offline" class="offline" hidden>Ingen uppkoppling. Du ser den senast hämtade listan.</div>
+<header class="top" id="top"></header>
+<main id="main" class="wrap">
+  <div class="skeleton" style="height:210px"></div><div class="skeleton"></div><div class="skeleton"></div>
+</main>
+<div id="map" hidden></div>
+<div id="overlay"></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<nav class="nav" id="nav" aria-label="Huvudmeny"></nav>
 <script src="app.js"></script>
 </body>
 </html>
