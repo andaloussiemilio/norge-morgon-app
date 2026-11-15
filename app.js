@@ -42,6 +42,11 @@ let DATA = null;
 let J = {}, H = {}, nearJob = {}, nearHome = {};
 let newCut = null;
 let limit = 24;
+let dirty = false;        // något har sparats eller dolts sedan listan ritades
+const scrollPos = {};     // var i varje flik man var senast
+const tabLimit = {};
+let mapNeedsFit = true;
+let mapItems = [], mapVisible = [];
 let moreObserver = null;
 const sheets = []; // öppna ark, överst sist
 
@@ -68,6 +73,7 @@ function setMark(id, patch) {
   const next = { ...mk(id), ...patch, t: Date.now() };
   if (!next.s && !next.st && !next.note) delete marks[id]; else marks[id] = next;
   store.set('marks', marks);
+  dirty = true;
 }
 const STATUS = { sokt: 'Sökt', intervju: 'Intervju', erbjudande: 'Erbjudande', avslag: 'Avslag' };
 
@@ -176,7 +182,7 @@ function homeCard(h, mode = 'wide', i = 0) {
   if (!imgs.length) media = '<div class="noimg">Inga bilder i annonsen</div>';
   else if (mode === 'tile') media = `<img src="${esc((h.cover || imgs[0]).replace('/dynamic/960w/', '/dynamic/640w/'))}" data-full="${esc(imgs[0])}" loading="${i < 6 ? 'eager' : 'lazy'}" decoding="async" alt="" ${fallback}>`;
   else media = `<div class="gallery">${imgs.map((src, n) => `<img src="${esc(n === 0 && h.cover ? h.cover : src)}" data-full="${esc(src)}" loading="lazy" decoding="async" alt="" ${fallback}>`).join('')}</div>
-    ${total > 1 ? `<span class="counter">1/${total}</span>` : ''}`;
+    ${imgs.length > 1 ? `<div class="dots">${imgs.map((_, n) => `<i class="${n ? '' : 'on'}"></i>`).join('')}</div>` : ''}`;
   const near = (nearHome[h.id] || []).length;
   const avail = h.move_in_fits ? 'ledig jan/feb' : availInfo(h).toLowerCase();
   return `<article class="card" data-act="open" data-id="${esc(h.id)}" tabindex="0">
@@ -207,9 +213,18 @@ function jobTags(j, full) {
     ...(full ? (j.cats || []).map((c) => `<span class="tag">${esc(DATA.categories[c] || c)}</span>`) : []),
   ].join('');
 }
+// En liten kartbild över var jobbet ligger: gör jobblistan lättare att skumma.
+function tileThumb(x, size = 60) {
+  if (x.lat == null) return '';
+  const z = 9, n = 2 ** z, bg = size * 2.6;
+  const fx = ((x.lon + 180) / 360) * n, rad = (x.lat * Math.PI) / 180;
+  const fy = ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n;
+  const pos = (f) => Math.round(Math.min(0, Math.max(size - bg, size / 2 - (f - Math.floor(f)) * bg)));
+  return `style="background-image:url(https://tile.openstreetmap.org/${z}/${Math.floor(fx)}/${Math.floor(fy)}.png);background-size:${bg}px;background-position:${pos(fx)}px ${pos(fy)}px"`;
+}
 function jobCard(j) {
   return `<article class="card tint job" data-act="open" data-id="${esc(j.id)}" tabindex="0">
-    ${ring(j.score)}
+    <div class="jthumb" ${tileThumb(j)} role="img" aria-label="Betyg ${j.score} av 5, ${esc(j.kommune)}"><span class="sbadge s${j.score}">${j.score}</span></div>
     <div>
       <h3 class="clamp2">${esc(j.title)}</h3>
       <p class="facts clamp1">${esc(j.employer)} · ${esc(j.kommune)}</p>
@@ -282,25 +297,41 @@ function viewToday() {
     .sort((a, b) => dueInfo(a).days - dueInfo(b).days).slice(0, 6);
   const updated = new Date(DATA.generated).toLocaleString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   const section = (title, tab, body, cls = '') => body ? `<div class="sec"><h2>${title}</h2>${tab ? `<button data-act="tab" data-tab="${tab}">Visa alla</button>` : ''}</div><div class="rail ${cls}">${body}</div>` : '';
+  const since = newCut ? `Nytt sedan du senast öppnade appen, ${shortDate(new Date(newCut))}.` : 'Nytt betyder här det som kom med i den senaste hämtningen.';
   return `<section class="hero">
       <div class="eyebrow">${esc(updated)}</div>
       <h1>${hello}. ${esc(headline)}.</h1>
-      <p>${s.pairs ? `${plural(s.pairs, 'kombination', 'kombinationer')} av jobb och bostad inom ${DATA.limits.drive} minuters bilväg.` : 'Här samlas jobb och hyresbostäder i Nord-Norge varje morgon.'}</p>
-      <div class="nums">
-        <button class="num" data-act="tab" data-tab="bostader"><b>${s.homes}</b><span>bostäder</span>${newHomes.length ? `<em>+${newHomes.length} nya</em>` : ''}</button>
-        <button class="num" data-act="tab" data-tab="jobb"><b>${s.jobs}</b><span>jobb</span>${newJobs.length ? `<em>+${newJobs.length} nya</em>` : ''}</button>
-        <button class="num" data-act="tab" data-tab="par"><b>${s.pairs}</b><span>jobb + bostad</span></button>
-      </div></section>
+      <p class="muted small">${since}</p></section>
     ${section(newHomes.length >= 2 ? 'Nya bostäder' : 'Bostäder för dig', 'bostader', homes.map((h) => homeCard(h, 'wide')).join(''))}
     ${section(newJobs.length >= 3 ? 'Nya jobb' : 'Jobb som passar dig', 'jobb', topJobs.map(jobCard).join(''), 'narrow')}
     ${section('Brev klara att skicka', '', DATA.jobs.filter((j) => (DATA.letters || {})[j.id] && !isHidden(j.id) && !mk(j.id).st).slice(0, 8).map(jobCard).join(''), 'narrow')}
     ${section('Jobb + bostad nära varandra', 'par', pairs.map(pairCard).join(''))}
     ${section('Frist snart', '', soon.map(jobCard).join(''), 'narrow')}
-    <div class="sec"><h2>Per område</h2></div>
+    <div class="sec"><h2>Läget just nu</h2></div>
+    <div class="nums" style="margin:0 16px 14px">
+      <button class="num" data-act="tab" data-tab="bostader"><b>${s.homes}</b><span>bostäder</span>${newHomes.length ? `<em>+${newHomes.length} nya</em>` : ''}</button>
+      <button class="num" data-act="tab" data-tab="jobb"><b>${s.jobs}</b><span>jobb</span>${newJobs.length ? `<em>+${newJobs.length} nya</em>` : ''}</button>
+      <button class="num" data-act="tab" data-tab="par"><b>${s.pairs}</b><span>jobb + bostad</span></button>
+    </div>
     <div class="panel"><table>
       <tr><th>Område</th><th>Jobb</th><th>Bostäder</th><th>Par</th></tr>
       ${s.per_area.map((a) => `<tr><td>${esc(a.name)}</td><td>${a.jobs}${a.new_jobs ? ` <em>+${a.new_jobs}</em>` : ''}</td><td>${a.homes}${a.new_homes ? ` <em>+${a.new_homes}</em>` : ''}</td><td>${a.pairs}</td></tr>`).join('')}
     </table></div>`;
+}
+
+// Aktiva filter som inte syns bland snabbknapparna, som piller man kan ta bort ett i taget.
+function filterPills(kind) {
+  const f = ui[kind], out = [];
+  const pill = (label, attrs) => out.push(`<button class="chip pill" ${attrs} aria-label="Ta bort filter: ${esc(label)}">${esc(label)} ${icon('x')}</button>`);
+  if (f.q.trim()) pill(`"${f.q.trim()}"`, `data-act="clearq" data-kind="${kind}"`);
+  if (kind === 'jobs') {
+    f.cats.forEach((c) => pill(DATA.categories[c] || c, `data-act="cat" data-val="${c}"`));
+    if (f.min) pill(`Betyg ${f.min}+`, 'data-act="set" data-kind="jobs" data-key="min" data-val="0"');
+    if (f.english) pill('Engelska räcker', 'data-act="toggle" data-kind="jobs" data-key="english"');
+    if (!f.hideApplied) pill('Visar även sökta', 'data-act="toggle" data-kind="jobs" data-key="hideApplied"');
+  } else if (f.maxRent < DEF.homes.maxRent) pill(`Högst ${nf(f.maxRent)} kr`, `data-act="set" data-kind="homes" data-key="maxRent" data-val="${DEF.homes.maxRent}"`);
+  if (out.length > 1) out.push(`<button class="chip pill clear" data-act="reset" data-kind="${kind}">Rensa alla</button>`);
+  return out.length ? `<div class="chips pills">${out.join('')}</div>` : '';
 }
 
 function viewList(kind) {
@@ -315,6 +346,7 @@ function viewList(kind) {
   const empty = `<div class="empty">${icon('search')}<b>Inget matchar just nu</b>Prova att ta bort ett filter eller byta område.<br><br><button class="btn" data-act="reset" data-kind="${kind}">Rensa filter</button></div>`;
   return `${seg}<div class="count"><span class="muted small">${items.length} ${noun}${items.length > 1 ? ` · <button class="linkbtn" data-act="triage" data-kind="${kind}">Gå igenom en i taget</button>` : ''}</span>
       <select data-act="sort" data-kind="${kind}" aria-label="Sortering">${sorts.map(([v, l]) => `<option value="${v}" ${f.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    ${filterPills(kind)}
     ${items.length ? `${cards}${items.length > limit ? '<div class="more" id="more"></div>' : ''}` : empty}`;
 }
 
@@ -353,8 +385,9 @@ function render() {
   const isMap = ui.tab === 'karta';
   $('#map').hidden = !isMap;
   main.hidden = isMap;
-  $$('.maptools, .mapcard').forEach((el) => el.remove());
-  if (isMap) { drawMap(); return; }
+  $$('.maptools, .mapcard, .mapbar').forEach((el) => el.remove());
+  dirty = false;
+  if (isMap) { drawMap(mapNeedsFit); mapNeedsFit = false; return; }
   main.innerHTML = ui.tab === 'idag' ? viewToday() : ui.tab === 'jobb' ? viewList('jobs') : ui.tab === 'bostader' ? viewList('homes') : ui.tab === 'par' ? viewPairs() : viewSaved();
   if (moreObserver) moreObserver.disconnect();
   const more = $('#more');
@@ -383,14 +416,19 @@ function mountSheet(animate) {
       ${spec.body()}
     </section>${spec.bar ? `<div class="actionbar">${spec.bar()}</div>` : ''}`;
   const sheet = $('.sheet', overlay);
-  if (animate) requestAnimationFrame(() => requestAnimationFrame(() => { $('.scrim', overlay).classList.add('in'); sheet.classList.add('in'); }));
+  if (animate) requestAnimationFrame(() => requestAnimationFrame(() => { const sc = $('.scrim', overlay); if (sc) sc.classList.add('in'); if (sheet.isConnected) sheet.classList.add('in'); }));
   else sheet.scrollTop = spec.keep ? keepScroll : 0;
   if (spec.mount) spec.mount(sheet);
 }
 const refreshSheet = () => { const s = sheets[sheets.length - 1]; if (s) { s.keep = true; mountSheet(false); s.keep = false; } };
 window.addEventListener('popstate', () => {
   if ($('.lightbox')) { $('.lightbox').remove(); return; }
-  if (sheets.length) { sheets.pop(); mountSheet(false); render(); }
+  if (sheets.length) {
+    const y = window.scrollY;
+    sheets.pop();
+    mountSheet(false);
+    if (dirty && !sheets.length) { render(); window.scrollTo(0, y); } // rita bara om när något faktiskt ändrats
+  }
 });
 const closeSheet = () => history.back();
 
@@ -569,10 +607,10 @@ function filterSheet(kind) {
       const specific = kind === 'jobs'
         ? `<div class="block"><h2>Yrke</h2><div class="grid2">${Object.entries(DATA.categories).map(([v, l]) => `<button class="pick ${f.cats.includes(v) ? 'on' : ''}" data-act="cat" data-val="${v}">${esc(l)}</button>`).join('')}</div></div>
            <div class="block"><h2>Lägsta betyg</h2><div class="seg">${[[0, 'Alla'], [3, '3+'], [4, '4+'], [5, '5']].map(([v, l]) => `<button data-act="set" data-kind="jobs" data-key="min" data-val="${v}" class="${f.min === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-           <div class="block">${opt('onlyNew', 'Bara nya')}${opt('housing', 'Boende erbjuds', 'Arbetsgivaren ordnar eller hjälper till med bostad')}${opt('start', 'Start passar', 'Januari eller februari 2027, snarest eller efter avtal')}
+           <div class="block">${opt('onlyNew', 'Bara nya', 'Tillkommet sedan du senast öppnade appen')}${opt('housing', 'Boende erbjuds', 'Arbetsgivaren ordnar eller hjälper till med bostad')}${opt('start', 'Start passar', 'Januari eller februari 2027, snarest eller efter avtal')}
              ${opt('noLacks', 'Utan krav jag saknar', 'Döljer fagbrev, säkerhetsklarering och tungt körkort')}${opt('english', 'Engelska räcker')}${opt('hideApplied', 'Dölj jobb jag redan sökt')}</div>`
         : `<div class="block"><h2>Högsta hyra: ${nf(f.maxRent)} kr</h2><input type="range" min="4000" max="16000" step="500" value="${f.maxRent}" data-range="maxRent"></div>
-           <div class="block">${opt('onlyNew', 'Bara nya')}${opt('view', 'Utsikt', 'Annonsen nämner utsikt, havutsikt eller panorama')}${opt('moveIn', 'Ledig januari eller februari 2027')}${opt('noShared', 'Dölj delat boende', 'Rum i kollektiv och bofellesskap')}</div>`;
+           <div class="block">${opt('onlyNew', 'Bara nya', 'Tillkommet sedan du senast öppnade appen')}${opt('view', 'Utsikt', 'Annonsen nämner utsikt, havutsikt eller panorama')}${opt('moveIn', 'Ledig januari eller februari 2027')}${opt('noShared', 'Dölj delat boende', 'Rum i kollektiv och bofellesskap')}</div>`;
       return `<div class="pad">${areas}${specific}
         <div class="block row"><button class="btn" data-act="reset" data-kind="${kind}">Rensa</button><button class="btn primary" data-act="close">Visa ${count}</button></div></div>`;
     },
@@ -623,29 +661,84 @@ async function drawMap(fit = true) {
     <button class="chip ${ui.map.jobs ? 'on' : ''}" data-act="maptoggle" data-key="jobs">${icon('work')} Jobb</button>
     <button class="chip ${ui.map.top ? 'on' : ''}" data-act="maptoggle" data-key="top">Bara betyg 4+</button></div>`;
   document.body.appendChild(tools);
+  const bar = document.createElement('button');
+  bar.className = 'mapbar';
+  bar.dataset.act = 'maplist';
+  bar.textContent = 'Laddar kartan…';
+  document.body.appendChild(bar);
   try { await loadLeaflet(); } catch { toast('Kartan kunde inte laddas. Kontrollera uppkopplingen.'); return; }
   if (!lmap) {
     lmap = L.map('map', { zoomControl: false, attributionControl: true }).setView([68.6, 16], 6);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(lmap);
     llayer = L.layerGroup().addTo(lmap);
     lmap.on('click', () => $$('.mapcard').forEach((el) => el.remove()));
+    lmap.on('moveend zoomend', renderPins);
   }
-  llayer.clearLayers();
-  const pts = [];
-  const add = (x, i, html, cls) => {
+  mapItems = [];
+  const add = (x, i) => {
     if (x.lat == null) return;
     const spread = x.geo_approx ? 0.014 : 0; // jobb utan adress ligger på kommunens mittpunkt: sprid ut dem
-    const lat = x.lat + Math.sin(i * 2.4) * spread, lon = x.lon + Math.cos(i * 2.4) * spread * 2.6;
-    L.marker([lat, lon], { icon: L.divIcon({ className: '', html: `<span class="pin ${cls}">${html}</span>`, iconSize: [0, 0] }), zIndexOffset: cls.includes('job') ? 0 : 500 })
-      .on('click', (e) => { L.DomEvent.stopPropagation(e); showMapCard(x.id); }).addTo(llayer);
-    pts.push([lat, lon]);
+    mapItems.push({ x, job: x.id in J, lat: x.lat + Math.sin(i * 2.4) * spread, lon: x.lon + Math.cos(i * 2.4) * spread * 2.6 });
   };
-  if (ui.map.jobs) DATA.jobs.filter((j) => !isHidden(j.id) && (!ui.map.top || j.score >= 4)).forEach((j, i) => add(j, i, j.score, 'job'));
-  const jobCount = pts.length;
-  if (ui.map.homes) DATA.homes.filter((h) => !isHidden(h.id)).forEach((h, i) => add(h, i, h.rent ? nf(h.rent) + ' kr' : 'Bostad', h.view ? 'view' : ''));
-  setTimeout(() => { lmap.invalidateSize(); const focus = pts.length > jobCount ? pts.slice(jobCount) : pts; // börja där bostäderna finns
-    if (fit && focus.length) lmap.fitBounds(focus, { padding: [50, 50], maxZoom: 11 }); }, 60);
+  if (ui.map.jobs) DATA.jobs.filter((j) => !isHidden(j.id) && (!ui.map.top || j.score >= 4)).forEach(add);
+  if (ui.map.homes) DATA.homes.filter((h) => !isHidden(h.id)).forEach(add);
+  setTimeout(() => {
+    lmap.invalidateSize();
+    const homes = mapItems.filter((it) => !it.job), focus = (homes.length ? homes : mapItems).map((it) => [it.lat, it.lon]); // börja där bostäderna finns
+    if (fit && focus.length) lmap.fitBounds(focus, { padding: [50, 50], maxZoom: 11 });
+    renderPins();
+  }, 60);
 }
+
+// Annonser som hamnar nära varandra på skärmen slås ihop till en bubbla med antal. Tryck zoomar in.
+function renderPins() {
+  if (!lmap || ui.tab !== 'karta') return;
+  llayer.clearLayers();
+  const view = lmap.getBounds(), wide = view.pad(0.25), cell = 66, grid = new Map(), zoom = lmap.getZoom();
+  mapVisible = [];
+  for (const it of mapItems) {
+    if (!wide.contains([it.lat, it.lon])) continue;
+    if (view.contains([it.lat, it.lon])) mapVisible.push(it.x);
+    const pt = lmap.latLngToContainerPoint([it.lat, it.lon]);
+    const key = `${Math.floor(pt.x / (cell * 2))}:${Math.floor(pt.y / cell)}`; // bubblorna är breda, så rutorna är det också
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(it);
+  }
+  const marker = (lat, lon, html, cls, z, onClick) => L.marker([lat, lon], { icon: L.divIcon({ className: '', html: `<span class="pin ${cls}">${html}</span>`, iconSize: [0, 0] }), zIndexOffset: z })
+    .on('click', (e) => { L.DomEvent.stopPropagation(e); onClick(); }).addTo(llayer);
+  for (const group of grid.values()) {
+    if (group.length === 1 || zoom >= 15) {
+      group.forEach((it) => marker(it.lat, it.lon, it.job ? it.x.score : (it.x.rent ? nf(it.x.rent) + ' kr' : 'Bostad'), it.job ? 'job' : (it.x.view ? 'view' : ''), it.job ? 0 : 400, () => showMapCard(it.x.id)));
+      continue;
+    }
+    const homes = group.filter((it) => !it.job).length, jobs = group.length - homes;
+    const label = [homes ? `${homes} ${homes === 1 ? 'bostad' : 'bostäder'}` : '', jobs ? `${jobs} jobb` : ''].filter(Boolean).join(' · ');
+    const lat = group.reduce((a, it) => a + it.lat, 0) / group.length, lon = group.reduce((a, it) => a + it.lon, 0) / group.length;
+    marker(lat, lon, label, `cluster ${homes ? '' : 'jobs'}`, 800, () => lmap.fitBounds(group.map((it) => [it.lat, it.lon]), { padding: [70, 70], maxZoom: Math.min(zoom + 3, 15) }));
+  }
+  const bar = $('.mapbar');
+  if (bar) {
+    const h = mapVisible.filter((x) => x.id in H).length, j = mapVisible.length - h;
+    bar.innerHTML = mapVisible.length ? `${[h ? `${h} ${h === 1 ? 'bostad' : 'bostäder'}` : '', j ? `${j} jobb` : ''].filter(Boolean).join(' och ')} här · <u>Visa lista</u>` : 'Inget i det här området. Zooma ut.';
+    bar.disabled = !mapVisible.length;
+  }
+}
+
+// Listan över det som syns i kartan just nu: bostäder först, sedan jobb.
+function mapListSheet() {
+  const homes = mapVisible.filter((x) => x.id in H).sort((a, b) => b.rank - a.rank), jobs = mapVisible.filter((x) => x.id in J).sort((a, b) => b.rank - a.rank);
+  return {
+    half: true, title: 'I kartan just nu',
+    body: () => `<div class="pad">
+      ${homes.length ? `<div class="block" style="margin-top:8px"><h2>${homes.length} ${homes.length === 1 ? 'bostad' : 'bostäder'}</h2><div class="nearby">${homes.slice(0, 40).map((h) => `<button data-act="open" data-id="${esc(h.id)}">
+        ${h.cover ? `<img src="${esc(h.cover.replace('/dynamic/960w/', '/dynamic/480w/'))}" loading="lazy" alt="">` : '<div class="ph"></div>'}<div><b>${esc(h.place || h.kommune || '')}${h.view ? ' · utsikt' : ''}</b><div class="facts clamp1">${esc(h.headline || h.title)}</div></div>
+        <div class="min">${h.rent ? nf(h.rent) + ' kr' : ''}<small>${h.rent ? 'per månad' : ''}</small></div></button>`).join('')}</div></div>` : ''}
+      ${jobs.length ? `<div class="block"><h2>${jobs.length} jobb</h2><div class="nearby">${jobs.slice(0, 40).map((j) => `<button data-act="open" data-id="${esc(j.id)}">
+        ${ring(j.score)}<div><b>${esc(j.title)}</b><div class="facts clamp1">${esc(j.employer)} · ${esc(j.kommune)}</div></div><div class="min"></div></button>`).join('')}</div></div>` : ''}
+    </div>`,
+  };
+}
+
 function showMapCard(id) {
   $$('.mapcard').forEach((el) => el.remove());
   const el = document.createElement('div');
@@ -676,7 +769,15 @@ document.addEventListener('click', (e) => {
   const d = t.dataset, act = d.act;
   if (act !== 'open') e.stopPropagation();
   switch (act) {
-    case 'tab': ui.tab = d.tab; limit = 20; render(); window.scrollTo(0, 0); break;
+    case 'tab': {
+      if (d.tab === ui.tab) { window.scrollTo({ top: 0, behavior: 'smooth' }); break; } // tryck på aktiv flik = till toppen
+      scrollPos[ui.tab] = window.scrollY; tabLimit[ui.tab] = limit;
+      ui.tab = d.tab; limit = tabLimit[d.tab] || 24;
+      render();
+      window.scrollTo(0, scrollPos[d.tab] || 0);
+      const main = $('#main'); main.classList.remove('fade'); void main.offsetWidth; main.classList.add('fade');
+      break;
+    }
     case 'open': if (e.target.closest('a, button:not([data-act="open"])')) return; openItem(d.id); break;
     case 'close': closeSheet(); break;
     case 'closebox': history.back(); break;
@@ -685,13 +786,20 @@ document.addEventListener('click', (e) => {
       const was = isSaved(d.id);
       setMark(d.id, { s: was ? null : 'saved' });
       toast(was ? 'Borttagen från sparat' : 'Sparad');
-      sheets.length ? refreshSheet() : render();
+      if (!was && navigator.vibrate) { try { navigator.vibrate(8); } catch { /* inte tillåtet här */ } }
+      if (sheets.length) refreshSheet(); else { const y = window.scrollY; render(); window.scrollTo(0, y); }
+      if (!was) requestAnimationFrame(() => $$('[data-act="save"]').filter((el) => el.dataset.id === d.id).forEach((el) => el.classList.add('pop')));
       break;
     }
     case 'hide': {
       const before = mk(d.id).s || null;
       setMark(d.id, { s: before === 'hidden' ? null : 'hidden' });
-      if (sheets.length) closeSheet(); else render();
+      if (sheets.length) closeSheet();
+      else {
+        const card = $$('#main article.card').find((el) => el.dataset.id === d.id);
+        const redraw = () => { const y = window.scrollY; render(); window.scrollTo(0, y); };
+        if (card) { card.classList.add('leaving'); setTimeout(redraw, 200); } else redraw();
+      }
       if (before !== 'hidden') toast('Dold. Finns under Sparat.', 'Ångra', () => { setMark(d.id, { s: before }); render(); });
       break;
     }
@@ -705,7 +813,7 @@ document.addEventListener('click', (e) => {
     case 'settings': openSheet(settingsSheet()); break;
     case 'savedtab': ui.saved = d.val; render(); break;
     case 'expand': $('#prose').classList.toggle('clamp'); t.textContent = $('#prose').classList.contains('clamp') ? 'Visa mer' : 'Visa mindre'; break;
-    case 'maptoggle': ui.map[d.key] = !ui.map[d.key]; store.set('ui2', ui); $$('.maptools, .mapcard').forEach((el) => el.remove()); drawMap(false); break;
+    case 'maptoggle': ui.map[d.key] = !ui.map[d.key]; store.set('ui2', ui); $$('.maptools, .mapcard, .mapbar').forEach((el) => el.remove()); drawMap(false); break;
     case 'theme': store.set('theme', d.val); if (d.val === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = d.val; refreshSheet(); break;
     case 'share': {
       const x = J[d.id] || H[d.id];
@@ -726,6 +834,8 @@ document.addEventListener('click', (e) => {
       if (spec.i >= spec.queue.length) { closeSheet(); toast('Klart. Du har gått igenom alla.'); } else mountSheet(false);
       break;
     }
+    case 'clearq': ui[d.kind].q = ''; limit = 24; render(); break;
+    case 'maplist': openSheet(mapListSheet()); break;
     case 'copylink': navigator.clipboard.writeText(`${location.origin}${location.pathname}#k=${store.get('key', '')}`).then(() => toast('Länken är kopierad'), () => toast('Kunde inte kopiera')); break;
     case 'export': {
       const a = document.createElement('a');
@@ -773,8 +883,10 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('scroll', (e) => {
   const g = e.target;
   if (!(g instanceof Element) || !g.classList.contains('gallery')) return;
+  const index = Math.round(g.scrollLeft / g.clientWidth);
   const counter = $('.counter', g.parentElement);
-  if (counter) counter.textContent = `${Math.round(g.scrollLeft / g.clientWidth) + 1}/${counter.textContent.split('/')[1]}`;
+  if (counter) counter.textContent = `${index + 1}/${counter.textContent.split('/')[1]}`;
+  $$('.dots i', g.parentElement).forEach((dot, k) => dot.classList.toggle('on', k === index));
 }, true);
 window.addEventListener('scroll', () => $('#top').classList.toggle('scrolled', window.scrollY > 4), { passive: true });
 const net = () => { $('#offline').hidden = navigator.onLine; };

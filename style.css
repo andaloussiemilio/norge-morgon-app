@@ -63,6 +63,10 @@ svg.i { width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentCo
 .chip.on { background: var(--ink); color: var(--bg); }
 .chip svg.i { width: 16px; height: 16px; }
 .divider { flex: 0 0 1px; background: var(--line); margin: 7px 2px; }
+.chips.pills { padding-top: 0; }
+.chip.pill { height: 34px; padding: 0 10px 0 13px; background: var(--bg); border: 1px solid var(--ink); font-size: .84rem; }
+.chip.pill svg.i { width: 14px; height: 14px; }
+.chip.pill.clear { border-color: transparent; text-decoration: underline; text-underline-offset: 3px; padding: 0 8px; }
 
 /* ---------- idag ---------- */
 .hero { padding: 6px 16px 0; }
@@ -94,6 +98,9 @@ svg.i { width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentCo
 .r0 > img { aspect-ratio: 3 / 4; } .r1 > img { aspect-ratio: 1 / 1; } .r2 > img { aspect-ratio: 4 / 5; } .r3 > img { aspect-ratio: 5 / 6; }
 .noimg { aspect-ratio: 4 / 3; display: grid; place-items: center; color: var(--muted); font-size: .84rem; padding: 12px; text-align: center; }
 .media .counter { position: absolute; right: 10px; bottom: 10px; background: rgba(0, 0, 0, .62); color: #fff; padding: 3px 9px; border-radius: 10px; font-size: .74rem; font-weight: 600; }
+.dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .55); box-shadow: 0 0 2px rgba(0, 0, 0, .35); transition: transform .15s, background .15s; }
+.dots i.on { background: #fff; transform: scale(1.25); }
 .media .badges { position: absolute; left: 10px; top: 10px; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 62px); }
 .badge { background: #fff; color: #1c1c1a; font-size: .74rem; font-weight: 650; padding: 5px 10px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); white-space: nowrap; }
 .badge.new { background: var(--accent); color: #fff; }
@@ -120,7 +127,12 @@ svg.i { width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentCo
 .list { padding: 0 16px; display: grid; gap: 10px; }
 
 .tint { background: var(--soft); border-radius: 20px; }
-.job { display: grid; grid-template-columns: 46px 1fr; gap: 13px; padding: 16px 44px 16px 16px; }
+.job { display: grid; grid-template-columns: 60px 1fr; gap: 16px; padding: 16px 44px 16px 16px; }
+.jthumb { width: 60px; height: 60px; border-radius: 14px; background-color: var(--soft-2); background-repeat: no-repeat; position: relative; }
+.sbadge { position: absolute; right: -7px; bottom: -7px; width: 29px; height: 29px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .86rem;
+  background: var(--good); color: var(--bg); border: 3px solid var(--soft); }
+.sbadge.s3 { background: var(--view); } .sbadge.s2, .sbadge.s1 { background: var(--muted); }
+.mapcard .sbadge { border-color: var(--bg); }
 .job .reason { margin-top: 9px; font-size: .9rem; color: var(--body); }
 .job .save { position: absolute; right: 4px; top: 6px; width: 42px; height: 42px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
 .job .save.on { color: var(--accent); }
@@ -230,13 +242,18 @@ td em { font-style: normal; color: var(--accent); font-weight: 650; font-size: .
 .maptools .chips { padding-bottom: 0; }
 .maptools .chip { background: var(--bg); box-shadow: var(--float); }
 .maptools .chip.on { background: var(--ink); }
-.mapcard { position: fixed; z-index: 22; left: 12px; right: 12px; bottom: calc(var(--nav-h) + 14px + env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; background: var(--bg); border-radius: 20px; box-shadow: var(--float); }
+.mapcard { position: fixed; z-index: 22; left: 12px; right: 12px; bottom: calc(var(--nav-h) + 72px + env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; background: var(--bg); border-radius: 20px; box-shadow: var(--float); }
 .mapcard .tint { background: none; }
 .mapcard .mini.home { padding: 12px; }
 .leaflet-container { background: var(--soft); font: inherit; }
 .pin { background: #fff; color: #1c1c1a; font-weight: 700; font-size: .78rem; padding: 5px 9px; border-radius: 14px; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); white-space: nowrap; display: inline-block; transform: translate(-50%, -50%); }
 .pin.job { background: #1c1c1a; color: #fff; border-radius: 50%; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; }
 .pin.view { background: var(--accent); color: #fff; }
+.pin.cluster { background: #1c1c1a; color: #fff; padding: 8px 13px; border-radius: 20px; font-size: .8rem; border: 2px solid #fff; }
+.pin.cluster.jobs { background: #55554f; }
+.mapbar { position: fixed; z-index: 21; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + 14px + env(safe-area-inset-bottom)); border: 0; cursor: pointer;
+  background: var(--ink); color: var(--bg); padding: 13px 20px; border-radius: 26px; font: inherit; font-size: .9rem; font-weight: 600; box-shadow: var(--float); white-space: nowrap; max-width: calc(100% - 24px); }
+.mapbar:disabled { opacity: .85; font-weight: 500; }
 .pin.here { outline: 3px solid var(--accent); outline-offset: 2px; }
 .minimap { height: 210px; border-radius: var(--r); overflow: hidden; position: relative; z-index: 0; isolation: isolate; background: var(--soft); }
 
@@ -259,6 +276,11 @@ td em { font-style: normal; color: var(--accent); font-weight: 650; font-size: .
 .keybox input { width: 100%; min-height: 52px; margin: 16px 0; padding: 0 16px; border-radius: 14px; border: 1px solid var(--muted); background: var(--bg); color: var(--ink); font: inherit; }
 .offline { background: var(--warn-bg); color: var(--warn); text-align: center; font-size: .84rem; padding: 7px 12px; }
 .panel { margin: 0 16px; }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.pop svg.i { animation: pop .34s cubic-bezier(.3, 1.6, .5, 1); }
+.leaving { transition: opacity .2s, transform .2s; opacity: 0; transform: scale(.95); }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.fade { animation: fade .2s ease-out; }
 .linkbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .letter { white-space: pre-line; background: var(--soft); border-radius: var(--r); padding: 18px; line-height: 1.55; font-size: .97rem; color: var(--ink); }
 
